@@ -86,7 +86,7 @@ func (a *AsyncHttpManager) NewHandler() *AsyncHttpHandler {
 //      package rest
 //		import (
 //			"github.com/gorilla/mux"
-//          "github.com/heketi/heketi/rest"
+//          "github.com/heketi/rest"
 //			"net/http"
 //			"net/http/httptest"
 //			"time"
@@ -154,7 +154,7 @@ func (a *AsyncHttpManager) AsyncHttpRedirectFunc(w http.ResponseWriter,
 //      package rest
 //		import (
 //			"github.com/gorilla/mux"
-//          "github.com/heketi/heketi/rest"
+//          "github.com/heketi/rest"
 //			"net/http"
 //			"net/http/httptest"
 //			"time"
