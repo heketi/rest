@@ -56,9 +56,16 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 // Only use this function if you need to do every step by hand.
 // It is recommended to use AsyncHttpRedirectFunc() instead
 func (a *AsyncHttpManager) NewHandler() *AsyncHttpHandler {
+	return a.NewHandlerWithId(utils.GenUUID())
+}
+
+// NewHandlerWithId constructs and returns an AsyncHttpHandler with the
+// given ID. Compare to NewHandler() which automatically generates its
+// own ID.
+func (a *AsyncHttpManager) NewHandlerWithId(id string) *AsyncHttpHandler {
 	handler := &AsyncHttpHandler{
 		manager: a,
-		id:      utils.GenUUID(),
+		id:      id,
 	}
 
 	a.lock.Lock()
