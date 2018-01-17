@@ -143,6 +143,16 @@ func (a *AsyncHttpManager) AsyncHttpRedirectFunc(w http.ResponseWriter,
 	http.Redirect(w, r, handler.Url(), http.StatusAccepted)
 }
 
+func (a *AsyncHttpManager) AsyncHttpRedirectUsing(w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	handlerfunc func() (string, error)) {
+
+	handler := a.NewHandlerWithId(id)
+	handler.handle(handlerfunc)
+	http.Redirect(w, r, handler.Url(), http.StatusAccepted)
+}
+
 // Handler for asynchronous operation status
 // Register this handler with a router like Gorilla Mux
 //

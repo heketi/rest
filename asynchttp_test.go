@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -398,6 +399,61 @@ func TestApplicationWithRedirectFunc(t *testing.T) {
 	tests.Assert(t, err == nil)
 	location, err := r.Location()
 	tests.Assert(t, err == nil)
+
+	for {
+		// Since Get automatically redirects, we will
+		// just keep asking until we get a body
+		r, err := http.Get(location.String())
+		tests.Assert(t, err == nil)
+		tests.Assert(t, r.StatusCode == http.StatusOK)
+		if r.ContentLength > 0 {
+			body, err := ioutil.ReadAll(r.Body)
+			r.Body.Close()
+			tests.Assert(t, err == nil)
+			tests.Assert(t, string(body) == "HelloWorld")
+			break
+		} else {
+			tests.Assert(t, r.Header.Get("X-Pending") == "true")
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+}
+
+func TestAsyncHttpRedirectUsing(t *testing.T) {
+
+	// Setup asynchronous manager
+	route := "/x"
+	manager := NewAsyncHttpManager(route)
+
+	// Setup the route
+	router := mux.NewRouter()
+	router.HandleFunc(route+"/{id}", manager.HandlerStatus).Methods("GET")
+	router.HandleFunc("/result", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "HelloWorld")
+	}).Methods("GET")
+
+	router.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+		manager.AsyncHttpRedirectUsing(w, r, "bob", func() (string, error) {
+			time.Sleep(500 * time.Millisecond)
+			return "/result", nil
+		})
+	}).Methods("GET")
+
+	// Setup the server
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	r, err := http.Get(ts.URL + "/app")
+	tests.Assert(t, r.StatusCode == http.StatusAccepted)
+	tests.Assert(t, err == nil)
+	location, err := r.Location()
+	tests.Assert(t, err == nil)
+
+	tests.Assert(t, strings.Contains(location.String(), "bob"),
+		`expected "bob" in newloc, got:`, location)
 
 	for {
 		// Since Get automatically redirects, we will
