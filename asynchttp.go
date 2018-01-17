@@ -71,6 +71,8 @@ func (a *AsyncHttpManager) NewHandlerWithId(id string) *AsyncHttpHandler {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
+	_, idPresent := a.handlers[handler.id]
+	godbc.Require(!idPresent)
 	a.handlers[handler.id] = handler
 
 	return handler
