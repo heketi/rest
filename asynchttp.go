@@ -39,6 +39,7 @@ type AsyncHttpHandler struct {
 
 // Manager of asynchronous operations
 type AsyncHttpManager struct {
+	IdGen    func() string
 	lock     sync.RWMutex
 	route    string
 	handlers map[string]*AsyncHttpHandler
@@ -49,6 +50,7 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 	return &AsyncHttpManager{
 		route:    route,
 		handlers: make(map[string]*AsyncHttpHandler),
+		IdGen:    utils.GenUUID,
 	}
 }
 
@@ -56,7 +58,7 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 // Only use this function if you need to do every step by hand.
 // It is recommended to use AsyncHttpRedirectFunc() instead
 func (a *AsyncHttpManager) NewHandler() *AsyncHttpHandler {
-	return a.NewHandlerWithId(utils.GenUUID())
+	return a.NewHandlerWithId(a.NewId())
 }
 
 // NewHandlerWithId constructs and returns an AsyncHttpHandler with the
@@ -76,6 +78,12 @@ func (a *AsyncHttpManager) NewHandlerWithId(id string) *AsyncHttpHandler {
 	a.handlers[handler.id] = handler
 
 	return handler
+}
+
+// NewId returns a new string id for a handler. This string is not preserved
+// internally and must be passed to another function to be used.
+func (a *AsyncHttpManager) NewId() string {
+	return a.IdGen()
 }
 
 // Create an asynchronous operation handler and return the appropiate
