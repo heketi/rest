@@ -122,21 +122,7 @@ func (a *AsyncHttpManager) AsyncHttpRedirectFunc(w http.ResponseWriter,
 	handlerfunc func() (string, error)) {
 
 	handler := a.NewHandler()
-	go func() {
-		logger.Info("Started job %v", handler.id)
-
-		ts := time.Now()
-		url, err := handlerfunc()
-		logger.Info("Completed job %v in %v", handler.id, time.Since(ts))
-
-		if err != nil {
-			handler.CompletedWithError(err)
-		} else if url != "" {
-			handler.CompletedWithLocation(url)
-		} else {
-			handler.Completed()
-		}
-	}()
+	handler.handle(handlerfunc)
 	http.Redirect(w, r, handler.Url(), http.StatusAccepted)
 }
 
@@ -267,4 +253,23 @@ func (h *AsyncHttpHandler) Completed() {
 	godbc.Ensure(h.completed == true)
 	godbc.Ensure(h.location == "")
 	godbc.Ensure(h.err == nil)
+}
+
+// handle starts running the given function in the background (goroutine).
+func (h *AsyncHttpHandler) handle(f func() (string, error)) {
+	go func() {
+		logger.Info("Started job %v", h.id)
+
+		ts := time.Now()
+		url, err := f()
+		logger.Info("Completed job %v in %v", h.id, time.Since(ts))
+
+		if err != nil {
+			h.CompletedWithError(err)
+		} else if url != "" {
+			h.CompletedWithLocation(url)
+		} else {
+			h.Completed()
+		}
+	}()
 }
