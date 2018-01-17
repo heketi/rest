@@ -16,12 +16,13 @@
 package rest
 
 import (
-	"github.com/gorilla/mux"
-	"github.com/heketi/utils"
-	"github.com/lpabon/godbc"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/heketi/utils"
+	"github.com/lpabon/godbc"
 )
 
 var (
