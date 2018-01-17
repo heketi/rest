@@ -474,3 +474,72 @@ func TestAsyncHttpRedirectUsing(t *testing.T) {
 	}
 
 }
+
+func TestAsyncHttpRedirectFuncCustomIds(t *testing.T) {
+
+	// Setup asynchronous manager
+	route := "/x"
+	manager := NewAsyncHttpManager(route)
+
+	i := 0
+	manager.IdGen = func() string {
+		s := fmt.Sprintf("abc-%v%v%v", i, i, i)
+		i += 1
+		return s
+	}
+
+	// Setup the route
+	router := mux.NewRouter()
+	router.HandleFunc(route+"/{id}", manager.HandlerStatus).Methods("GET")
+	router.HandleFunc("/result", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "HelloWorld")
+	}).Methods("GET")
+
+	router.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+		manager.AsyncHttpRedirectFunc(w, r, func() (string, error) {
+			time.Sleep(500 * time.Millisecond)
+			return "/result", nil
+		})
+	}).Methods("GET")
+
+	// Setup the server
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	for j := 0; j < 4; j++ {
+		r, err := http.Get(ts.URL + "/app")
+		tests.Assert(t, r.StatusCode == http.StatusAccepted)
+		tests.Assert(t, err == nil)
+		location, err := r.Location()
+		tests.Assert(t, err == nil)
+
+		// test that our custom id generator generated the IDs
+		// according to our pattern
+		tests.Assert(t, strings.Contains(location.String(), "abc-"),
+			`expected "abc-" in newloc, got:`, location)
+		part := fmt.Sprintf("-%v%v%v", j, j, j)
+		tests.Assert(t, strings.Contains(location.String(), part),
+			"expected", part, "in newloc, got:", location)
+
+		for {
+			// Since Get automatically redirects, we will
+			// just keep asking until we get a body
+			r, err := http.Get(location.String())
+			tests.Assert(t, err == nil)
+			tests.Assert(t, r.StatusCode == http.StatusOK)
+			if r.ContentLength > 0 {
+				body, err := ioutil.ReadAll(r.Body)
+				r.Body.Close()
+				tests.Assert(t, err == nil)
+				tests.Assert(t, string(body) == "HelloWorld")
+				break
+			} else {
+				tests.Assert(t, r.Header.Get("X-Pending") == "true")
+				time.Sleep(time.Millisecond)
+			}
+		}
+	}
+
+}
