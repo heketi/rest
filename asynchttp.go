@@ -16,12 +16,13 @@
 package rest
 
 import (
-	"github.com/gorilla/mux"
-	"github.com/heketi/utils"
-	"github.com/lpabon/godbc"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/heketi/utils"
+	"github.com/lpabon/godbc"
 )
 
 var (
@@ -38,6 +39,7 @@ type AsyncHttpHandler struct {
 
 // Manager of asynchronous operations
 type AsyncHttpManager struct {
+	IdGen    func() string
 	lock     sync.RWMutex
 	route    string
 	handlers map[string]*AsyncHttpHandler
@@ -48,6 +50,7 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 	return &AsyncHttpManager{
 		route:    route,
 		handlers: make(map[string]*AsyncHttpHandler),
+		IdGen:    utils.GenUUID,
 	}
 }
 
@@ -55,17 +58,32 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 // Only use this function if you need to do every step by hand.
 // It is recommended to use AsyncHttpRedirectFunc() instead
 func (a *AsyncHttpManager) NewHandler() *AsyncHttpHandler {
+	return a.NewHandlerWithId(a.NewId())
+}
+
+// NewHandlerWithId constructs and returns an AsyncHttpHandler with the
+// given ID. Compare to NewHandler() which automatically generates its
+// own ID.
+func (a *AsyncHttpManager) NewHandlerWithId(id string) *AsyncHttpHandler {
 	handler := &AsyncHttpHandler{
 		manager: a,
-		id:      utils.GenUUID(),
+		id:      id,
 	}
 
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
+	_, idPresent := a.handlers[handler.id]
+	godbc.Require(!idPresent)
 	a.handlers[handler.id] = handler
 
 	return handler
+}
+
+// NewId returns a new string id for a handler. This string is not preserved
+// internally and must be passed to another function to be used.
+func (a *AsyncHttpManager) NewId() string {
+	return a.IdGen()
 }
 
 // Create an asynchronous operation handler and return the appropiate
@@ -121,21 +139,17 @@ func (a *AsyncHttpManager) AsyncHttpRedirectFunc(w http.ResponseWriter,
 	handlerfunc func() (string, error)) {
 
 	handler := a.NewHandler()
-	go func() {
-		logger.Info("Started job %v", handler.id)
+	handler.handle(handlerfunc)
+	http.Redirect(w, r, handler.Url(), http.StatusAccepted)
+}
 
-		ts := time.Now()
-		url, err := handlerfunc()
-		logger.Info("Completed job %v in %v", handler.id, time.Since(ts))
+func (a *AsyncHttpManager) AsyncHttpRedirectUsing(w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	handlerfunc func() (string, error)) {
 
-		if err != nil {
-			handler.CompletedWithError(err)
-		} else if url != "" {
-			handler.CompletedWithLocation(url)
-		} else {
-			handler.Completed()
-		}
-	}()
+	handler := a.NewHandlerWithId(id)
+	handler.handle(handlerfunc)
 	http.Redirect(w, r, handler.Url(), http.StatusAccepted)
 }
 
@@ -266,4 +280,23 @@ func (h *AsyncHttpHandler) Completed() {
 	godbc.Ensure(h.completed == true)
 	godbc.Ensure(h.location == "")
 	godbc.Ensure(h.err == nil)
+}
+
+// handle starts running the given function in the background (goroutine).
+func (h *AsyncHttpHandler) handle(f func() (string, error)) {
+	go func() {
+		logger.Info("Started job %v", h.id)
+
+		ts := time.Now()
+		url, err := f()
+		logger.Info("Completed job %v in %v", h.id, time.Since(ts))
+
+		if err != nil {
+			h.CompletedWithError(err)
+		} else if url != "" {
+			h.CompletedWithLocation(url)
+		} else {
+			h.Completed()
+		}
+	}()
 }
