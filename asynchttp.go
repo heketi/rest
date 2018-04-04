@@ -16,12 +16,14 @@
 package rest
 
 import (
-	"github.com/gorilla/mux"
-	"github.com/heketi/utils"
-	"github.com/lpabon/godbc"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/heketi/heketi/middleware"
+	"github.com/heketi/utils"
+	"github.com/lpabon/godbc"
 )
 
 var (
@@ -54,10 +56,15 @@ func NewAsyncHttpManager(route string) *AsyncHttpManager {
 // Use to create a new asynchronous operation handler.
 // Only use this function if you need to do every step by hand.
 // It is recommended to use AsyncHttpRedirectFunc() instead
-func (a *AsyncHttpManager) NewHandler() *AsyncHttpHandler {
+func (a *AsyncHttpManager) NewHandler(requestID string) *AsyncHttpHandler {
+
+	if requestID == "" {
+		requestID = utils.GenUUID()
+	}
+
 	handler := &AsyncHttpHandler{
 		manager: a,
-		id:      utils.GenUUID(),
+		id:      requestID,
 	}
 
 	a.lock.Lock()
@@ -120,7 +127,7 @@ func (a *AsyncHttpManager) AsyncHttpRedirectFunc(w http.ResponseWriter,
 	r *http.Request,
 	handlerfunc func() (string, error)) {
 
-	handler := a.NewHandler()
+	handler := a.NewHandler(middleware.GetRequestID(r.Context()))
 	go func() {
 		logger.Info("Started job %v", handler.id)
 

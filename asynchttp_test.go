@@ -19,14 +19,16 @@ package rest
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/heketi/tests"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/heketi/tests"
+	"github.com/heketi/utils"
 )
 
 func TestNewManager(t *testing.T) {
@@ -42,7 +44,7 @@ func TestNewHandler(t *testing.T) {
 
 	manager := NewAsyncHttpManager("/x")
 
-	handler := manager.NewHandler()
+	handler := manager.NewHandler("12345")
 	tests.Assert(t, handler.location == "")
 	tests.Assert(t, handler.id != "")
 	tests.Assert(t, handler.completed == false)
@@ -52,7 +54,7 @@ func TestNewHandler(t *testing.T) {
 
 func TestHandlerUrl(t *testing.T) {
 	manager := NewAsyncHttpManager("/x")
-	handler := manager.NewHandler()
+	handler := manager.NewHandler("12345")
 
 	// overwrite id value
 	handler.id = "12345"
@@ -84,7 +86,7 @@ func TestHandlerCompletions(t *testing.T) {
 	// Setup asynchronous manager
 	route := "/x"
 	manager := NewAsyncHttpManager(route)
-	handler := manager.NewHandler()
+	handler := manager.NewHandler("12345")
 
 	// Setup the route
 	router := mux.NewRouter()
@@ -114,7 +116,7 @@ func TestHandlerCompletions(t *testing.T) {
 	tests.Assert(t, ok == false)
 
 	// Create new handler
-	handler = manager.NewHandler()
+	handler = manager.NewHandler("12345")
 
 	// Request
 	r, err = http.Get(ts.URL + handler.Url())
@@ -134,7 +136,7 @@ func TestHandlerCompletions(t *testing.T) {
 	tests.Assert(t, string(body) == error_string+"\n")
 
 	// Create new handler
-	handler = manager.NewHandler()
+	handler = manager.NewHandler("12345")
 
 	// Request
 	r, err = http.Get(ts.URL + handler.Url())
@@ -284,7 +286,12 @@ func TestHandlerConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			handler := manager.NewHandler()
+			var handler *AsyncHttpHandler
+			if i%2 == 0 {
+				handler = manager.NewHandler(utils.GenUUID())
+			} else {
+				handler = manager.NewHandler("")
+			}
 			go func() {
 				time.Sleep(10 * time.Millisecond)
 				handler.Completed()
@@ -326,7 +333,7 @@ func TestHandlerApplication(t *testing.T) {
 		fmt.Fprint(w, "HelloWorld")
 	}).Methods("GET")
 	router.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
-		handler := manager.NewHandler()
+		handler := manager.NewHandler("12345")
 		go func() {
 			time.Sleep(500 * time.Millisecond)
 			handler.CompletedWithLocation("/result")
